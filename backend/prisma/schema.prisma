@@ -1,0 +1,221 @@
+// Prisma Schema for Build8Now Backend
+// Compatible with both SQLite (zero-config local dev & tests) and PostgreSQL (production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Set to "postgresql" when using PostgreSQL connection string
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         String      @default("CUSTOMER") // ADMIN, CUSTOMER, INFLUENCER
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  customer     Customer?
+  influencer   Influencer?
+
+  @@index([email])
+}
+
+model Customer {
+  id           String      @id @default(uuid())
+  userId       String      @unique
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone        String?
+  address      String?
+  
+  // Attribution link to an Influencer (Referral)
+  referredById String?
+  referredBy   Influencer? @relation("CustomerReferral", fields: [referredById], references: [id], onDelete: SetNull)
+
+  orders       Order[]
+  referrals    Referral[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([referredById])
+}
+
+model Influencer {
+  id             String         @id @default(uuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String         @default("ARCHITECT") // ARCHITECT, CONTRACTOR, INTERIOR_DESIGNER, BUILDER
+  referralCode   String         @unique
+  pointsBalance  Float          @default(0.0)
+  lifetimePoints Float          @default(0.0)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  referredCustomers Customer[]  @relation("CustomerReferral")
+  referrals         Referral[]
+  attributedOrders  Order[]     @relation("InfluencerOrders")
+  ledgerEntries     LoyaltyLedger[]
+
+  @@index([userId])
+  @@index([referralCode])
+}
+
+model Referral {
+  id           String     @id @default(uuid())
+  influencerId String
+  customerId   String
+  influencer   Influencer @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  customer     Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([influencerId, customerId])
+  @@index([influencerId])
+  @@index([customerId])
+}
+
+model ShippingProfile {
+  id                  String                  @id @default(uuid())
+  name                String                  @unique
+  description         String?
+  combinationStrategy String                  @default("SUM") // SUM, MAX, TIERED_SLAB
+  minCharge           Float?
+  maxCharge           Float?
+  isActive            Boolean                 @default(true)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  rules               ShippingRule[]
+  products            Product[]
+
+  @@index([name])
+}
+
+model ShippingRule {
+  id                String          @id @default(uuid())
+  shippingProfileId String
+  shippingProfile   ShippingProfile @relation(fields: [shippingProfileId], references: [id], onDelete: Cascade)
+  ruleType          String          // WEIGHT_SLAB, PER_KM_DISTANCE, VOLUMETRIC, AREA_SURFACE, BASE_PRICE_PERCENTAGE, FIXED_FEE
+  minUnit           Float?          // e.g. min weight or min distance
+  maxUnit           Float?          // e.g. max weight or max distance
+  baseRate          Float           @default(0.0)
+  perUnitRate       Float           @default(0.0)
+  priority          Int             @default(0)
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([shippingProfileId])
+  @@index([ruleType])
+}
+
+model Product {
+  id                String           @id @default(uuid())
+  name              String
+  slug              String           @unique
+  sku               String           @unique
+  category          String           // Cement, Steel, Bricks, Tiles, Electrical, Plumbing
+  price             Float
+  weightKg          Float
+  lengthCm          Float?
+  widthCm           Float?
+  heightCm          Float?
+  shippingProfileId String?
+  shippingProfile   ShippingProfile? @relation(fields: [shippingProfileId], references: [id], onDelete: SetNull)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  orderItems        OrderItem[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([shippingProfileId])
+}
+
+model LoyaltyRule {
+  id             String   @id @default(uuid())
+  name           String
+  ruleTarget     String   // PRODUCT, CATEGORY, CART_VALUE
+  targetValue    String?  // Product ID or Category name or min cart value as string
+  pointType      String   @default("PERCENTAGE") // PERCENTAGE, FIXED_POINTS
+  pointValue     Float    // e.g. 8.0 (8%) or 100
+  minOrderValue  Float?   @default(0.0)
+  maxPointsCap   Float?
+  priority       Int      @default(0) // Higher priority rule wins (Product=30 > Category=20 > Cart=10)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ruleTarget])
+  @@index([priority])
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique
+  customerId      String
+  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  influencerId    String?
+  influencer      Influencer? @relation("InfluencerOrders", fields: [influencerId], references: [id], onDelete: SetNull)
+  status          String      @default("PENDING") // PENDING, COMPLETED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED
+  subtotal        Float
+  shippingCost    Float       @default(0.0)
+  totalAmount     Float
+  currency        String      @default("INR")
+  refundedAmount  Float       @default(0.0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  items           OrderItem[]
+  ledgerEntries   LoyaltyLedger[]
+
+  @@index([customerId])
+  @@index([influencerId])
+  @@index([orderNumber])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int      @default(1)
+  unitPrice Float
+  subtotal  Float
+  weightKg  Float?
+  lengthCm  Float?
+  widthCm   Float?
+  heightCm  Float?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model LoyaltyLedger {
+  id             String     @id @default(uuid())
+  influencerId   String
+  influencer     Influencer @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  orderId        String
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventType      String     // ORDER_ACCRUAL, ORDER_CANCEL_REVERSAL, ORDER_REFUND_REVERSAL, REDEMPTION
+  pointsChange   Float      // Positive for credit (+), Negative for debit (-)
+  runningBalance Float      // Snapshot of balance after this entry (Audit trail)
+  idempotencyKey String     @unique // Guarantees duplicate order webhooks cannot award twice
+  reason         String?
+  metadataJson   String?    // Detailed calculation trace for 100% auditable accounting
+  createdAt      DateTime   @default(now())
+
+  @@unique([orderId, eventType, idempotencyKey])
+  @@index([influencerId, createdAt])
+  @@index([orderId])
+  @@index([idempotencyKey])
+}
