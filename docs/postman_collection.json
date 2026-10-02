@@ -1,0 +1,106 @@
+{
+  "info": {
+    "name": "Build8Now API Collection",
+    "description": "Comprehensive Postman collection for testing Build8Now Auth, Shipping, Loyalty, Orders, and Influencer APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@build8now.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "http://localhost:5000/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Login Customer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"amit.kumar@gmail.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "http://localhost:5000/api/v1/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shipping Engine",
+      "item": [
+        {
+          "name": "Calculate Dynamic Shipping",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"weightKg\": 75,\n  \"lengthCm\": 60,\n  \"widthCm\": 40,\n  \"heightCm\": 20,\n  \"distanceKm\": 25,\n  \"quantity\": 2,\n  \"productPrice\": 380\n}"
+            },
+            "url": "http://localhost:5000/api/v1/shipping/calculate"
+          }
+        },
+        {
+          "name": "List Shipping Profiles",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": "http://localhost:5000/api/v1/shipping/profiles"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loyalty System",
+      "item": [
+        {
+          "name": "Process Order Points (Idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{ORDER_ID}}\",\n  \"idempotencyKey\": \"webhook_test_key_001\"\n}"
+            },
+            "url": "http://localhost:5000/api/v1/loyalty/process-order"
+          }
+        },
+        {
+          "name": "Process Refund Reversal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{ORDER_ID}}\",\n  \"refundAmount\": 1900,\n  \"reason\": \"Returned damaged cement bags\",\n  \"idempotencyKey\": \"refund_test_key_001\"\n}"
+            },
+            "url": "http://localhost:5000/api/v1/loyalty/process-refund"
+          }
+        },
+        {
+          "name": "Get Influencer Ledger",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": "http://localhost:5000/api/v1/loyalty/ledger/{{INFLUENCER_ID}}"
+          }
+        }
+      ]
+    }
+  ]
+}
