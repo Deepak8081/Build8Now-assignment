@@ -1,0 +1,175 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Build8Now Logistics & Loyalty API",
+    "version": "1.0.0",
+    "description": "Production REST API for Build8Now Shipping Profile Engine, Influencer Loyalty System, and Order Processing"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "summary": "Register a new user (Admin, Customer, Influencer)",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string", "example": "john@example.com" },
+                  "password": { "type": "string", "example": "Password123!" },
+                  "name": { "type": "string", "example": "John Architect" },
+                  "role": { "type": "string", "enum": ["ADMIN", "CUSTOMER", "INFLUENCER"], "example": "INFLUENCER" },
+                  "influencerType": { "type": "string", "enum": ["ARCHITECT", "CONTRACTOR", "INTERIOR_DESIGNER", "BUILDER"], "example": "ARCHITECT" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User registered successfully" },
+          "400": { "description": "Validation error" },
+          "409": { "description": "User already exists" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate user & get JWT token",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "example": "admin@build8now.com" },
+                  "password": { "type": "string", "example": "AdminPass123!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/shipping/calculate": {
+      "post": {
+        "summary": "Calculate shipping cost for product/order line with multi-criteria dynamic engine",
+        "tags": ["Shipping"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": { "type": "string", "format": "uuid" },
+                  "shippingProfileId": { "type": "string", "format": "uuid" },
+                  "quantity": { "type": "integer", "example": 10 },
+                  "weightKg": { "type": "number", "example": 50.0 },
+                  "lengthCm": { "type": "number", "example": 60 },
+                  "widthCm": { "type": "number", "example": 40 },
+                  "heightCm": { "type": "number", "example": 20 },
+                  "distanceKm": { "type": "number", "example": 25.5 },
+                  "productPrice": { "type": "number", "example": 380.0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Calculation breakdown and total shipping cost" }
+        }
+      }
+    },
+    "/loyalty/process-order": {
+      "post": {
+        "summary": "Process and award loyalty points for an order (DB-level Idempotent)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orderId", "idempotencyKey"],
+                "properties": {
+                  "orderId": { "type": "string", "format": "uuid" },
+                  "idempotencyKey": { "type": "string", "example": "webhook_order_12345" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Points awarded or idempotent response" }
+        }
+      }
+    },
+    "/loyalty/process-refund": {
+      "post": {
+        "summary": "Reverse loyalty points for cancellation or full/partial refund",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orderId", "refundAmount", "reason", "idempotencyKey"],
+                "properties": {
+                  "orderId": { "type": "string", "format": "uuid" },
+                  "refundAmount": { "type": "number", "example": 1900.0 },
+                  "reason": { "type": "string", "example": "Damaged items returned" },
+                  "idempotencyKey": { "type": "string", "example": "refund_evt_5678" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Reversal processed and appended to ledger" }
+        }
+      }
+    },
+    "/loyalty/ledger/{influencerId}": {
+      "get": {
+        "summary": "Get append-only ledger transaction history for an influencer",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty"],
+        "parameters": [
+          { "name": "influencerId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Auditable transaction ledger" },
+          "403": { "description": "Forbidden if accessing other influencer's ledger" }
+        }
+      }
+    }
+  }
+}
