@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /auth/
+
+Sitemap: https://build8now.com/sitemap.xml
+Host: https://build8now.com
