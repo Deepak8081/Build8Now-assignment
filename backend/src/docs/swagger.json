@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Build8Now Logistics & Loyalty API",
+    "title": "Build8Now Logistics, Loyalty & RBAC API",
     "version": "1.0.0",
-    "description": "Production REST API for Build8Now Shipping Profile Engine, Influencer Loyalty System, and Order Processing"
+    "description": "Production-grade RESTful API for Build8Now material procurement. Features data-driven shipping profiles, multi-criteria freight calculation, 3-tier influencer loyalty precedence, database idempotency, append-only ledger, and role-based / object-level authorization (RBAC/ABAC)."
   },
   "servers": [
     {
@@ -23,37 +23,40 @@
   "paths": {
     "/auth/register": {
       "post": {
-        "summary": "Register a new user (Admin, Customer, Influencer)",
-        "tags": ["Auth"],
+        "summary": "Register a new user account (Customer or Influencer Partner)",
+        "tags": ["Authentication"],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["email", "password", "name"],
+                "required": ["email", "password", "name", "role"],
                 "properties": {
-                  "email": { "type": "string", "example": "john@example.com" },
+                  "email": { "type": "string", "example": "deepak@build8now.com" },
                   "password": { "type": "string", "example": "Password123!" },
-                  "name": { "type": "string", "example": "John Architect" },
-                  "role": { "type": "string", "enum": ["ADMIN", "CUSTOMER", "INFLUENCER"], "example": "INFLUENCER" },
-                  "influencerType": { "type": "string", "enum": ["ARCHITECT", "CONTRACTOR", "INTERIOR_DESIGNER", "BUILDER"], "example": "ARCHITECT" }
+                  "name": { "type": "string", "example": "Deepak Sharma" },
+                  "role": { "type": "string", "enum": ["CUSTOMER", "INFLUENCER", "ADMIN"], "example": "CUSTOMER" },
+                  "influencerType": { "type": "string", "enum": ["ARCHITECT", "CONTRACTOR", "INTERIOR_DESIGNER", "BUILDER"], "example": "ARCHITECT" },
+                  "customReferralCode": { "type": "string", "example": "INF-DEEPAK-ARCH" },
+                  "referredByCode": { "type": "string", "example": "INF-RAHUL-MAIN" },
+                  "phone": { "type": "string", "example": "+91 9876543210" }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "User registered successfully" },
-          "400": { "description": "Validation error" },
+          "201": { "description": "Account created successfully with signed JWT" },
+          "422": { "description": "Validation error (invalid email, name containing numbers, short password)" },
           "409": { "description": "User already exists" }
         }
       }
     },
     "/auth/login": {
       "post": {
-        "summary": "Authenticate user & get JWT token",
-        "tags": ["Auth"],
+        "summary": "Authenticate user credentials & obtain JWT bearer token",
+        "tags": ["Authentication"],
         "requestBody": {
           "required": true,
           "content": {
@@ -63,22 +66,100 @@
                 "required": ["email", "password"],
                 "properties": {
                   "email": { "type": "string", "example": "admin@build8now.com" },
-                  "password": { "type": "string", "example": "AdminPass123!" }
+                  "password": { "type": "string", "example": "Password123!" }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Login successful" },
-          "401": { "description": "Invalid credentials" }
+          "200": { "description": "Authenticated successfully with JWT token and user profile" },
+          "401": { "description": "Invalid email or password" }
         }
       }
     },
-    "/shipping/calculate": {
+    "/auth/me": {
+      "get": {
+        "summary": "Get authenticated user profile and active session details",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Authentication"],
+        "responses": {
+          "200": { "description": "Current user profile" },
+          "401": { "description": "Unauthorized - Missing or invalid token" }
+        }
+      }
+    },
+    "/shipping/profiles": {
+      "get": {
+        "summary": "List all shipping profiles with attached rules and strategy metadata",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Shipping Profiles (Task 1)"],
+        "responses": {
+          "200": { "description": "Array of shipping profiles" },
+          "401": { "description": "Unauthorized" }
+        }
+      },
       "post": {
-        "summary": "Calculate shipping cost for product/order line with multi-criteria dynamic engine",
-        "tags": ["Shipping"],
+        "summary": "Create a new shipping profile with multi-criteria rules (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Shipping Profiles (Task 1)"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "combinationStrategy"],
+                "properties": {
+                  "name": { "type": "string", "example": "Heavy Bulk Materials Profile" },
+                  "combinationStrategy": { "type": "string", "enum": ["SUM", "MAX", "TIERED_SLAB"], "example": "SUM" },
+                  "minCharge": { "type": "number", "example": 100 },
+                  "maxCharge": { "type": "number", "example": 25000 },
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["ruleType", "baseRate"],
+                      "properties": {
+                        "ruleType": { "type": "string", "enum": ["WEIGHT_SLAB", "PER_KM_DISTANCE", "VOLUMETRIC", "AREA_SURFACE", "FIXED_FEE"], "example": "WEIGHT_SLAB" },
+                        "minUnit": { "type": "number", "example": 0 },
+                        "maxUnit": { "type": "number", "example": 50 },
+                        "baseRate": { "type": "number", "example": 50 },
+                        "perUnitRate": { "type": "number", "example": 2 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Shipping profile created successfully" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      }
+    },
+    "/shipping/profiles/{id}": {
+      "get": {
+        "summary": "Get shipping profile details by ID",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Shipping Profiles (Task 1)"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Shipping profile details" },
+          "404": { "description": "Profile not found" }
+        }
+      },
+      "put": {
+        "summary": "Update shipping profile configuration (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Shipping Profiles (Task 1)"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -86,14 +167,80 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "productId": { "type": "string", "format": "uuid" },
-                  "shippingProfileId": { "type": "string", "format": "uuid" },
-                  "quantity": { "type": "integer", "example": 10 },
+                  "name": { "type": "string", "example": "Updated Heavy Freight" },
+                  "combinationStrategy": { "type": "string", "enum": ["SUM", "MAX", "TIERED_SLAB"], "example": "SUM" },
+                  "minCharge": { "type": "number", "example": 150 },
+                  "maxCharge": { "type": "number", "example": 30000 },
+                  "isActive": { "type": "boolean", "example": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile updated successfully" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      },
+      "delete": {
+        "summary": "Deactivate shipping profile (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Shipping Profiles (Task 1)"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Shipping profile deactivated" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      }
+    },
+    "/shipping/assign-product": {
+      "post": {
+        "summary": "Assign a shipping profile to a product (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Shipping Profiles (Task 1)"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["productId", "shippingProfileId"],
+                "properties": {
+                  "productId": { "type": "string", "example": "prod-cement-1" },
+                  "shippingProfileId": { "type": "string", "example": "sp-heavy-freight-1" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile assigned to product successfully" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      }
+    },
+    "/shipping/calculate": {
+      "post": {
+        "summary": "Calculate dynamic freight charge evaluating weight slabs, derived volume, surface area, and distance",
+        "tags": ["Shipping Profiles (Task 1)"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["productId", "weightKg", "distanceKm"],
+                "properties": {
+                  "productId": { "type": "string", "example": "prod-cement-1" },
+                  "shippingProfileId": { "type": "string" },
                   "weightKg": { "type": "number", "example": 50.0 },
                   "lengthCm": { "type": "number", "example": 60 },
                   "widthCm": { "type": "number", "example": 40 },
-                  "heightCm": { "type": "number", "example": 20 },
-                  "distanceKm": { "type": "number", "example": 25.5 },
+                  "heightCm": { "type": "number", "example": 15 },
+                  "distanceKm": { "type": "number", "example": 25.0 },
+                  "quantity": { "type": "integer", "example": 10 },
                   "productPrice": { "type": "number", "example": 380.0 }
                 }
               }
@@ -101,15 +248,95 @@
           }
         },
         "responses": {
-          "200": { "description": "Calculation breakdown and total shipping cost" }
+          "200": { "description": "Freight calculation breakdown with transparent rule evaluation trace" },
+          "422": { "description": "Validation error (negative weight, negative distance, out-of-range bounds)" }
+        }
+      }
+    },
+    "/loyalty/rules": {
+      "get": {
+        "summary": "List all active loyalty rules with 3-tier precedence metadata",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
+        "responses": {
+          "200": { "description": "Array of loyalty rules" }
+        }
+      },
+      "post": {
+        "summary": "Create a new configurable loyalty point rule with precedence (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "tier", "percentage", "precedence"],
+                "properties": {
+                  "name": { "type": "string", "example": "UltraTech Cement 8% Architect Reward" },
+                  "tier": { "type": "string", "enum": ["PRODUCT", "CATEGORY", "CART"], "example": "PRODUCT" },
+                  "targetId": { "type": "string", "example": "prod-cement-1" },
+                  "percentage": { "type": "number", "example": 8.0 },
+                  "precedence": { "type": "integer", "example": 30 },
+                  "minCartValue": { "type": "number", "example": 0 },
+                  "fixedPoints": { "type": "integer", "example": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Loyalty rule created" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      }
+    },
+    "/loyalty/rules/{id}": {
+      "put": {
+        "summary": "Update an existing loyalty rule (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "percentage": { "type": "number" },
+                  "precedence": { "type": "integer" },
+                  "isActive": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Loyalty rule updated" }
+        }
+      },
+      "delete": {
+        "summary": "Deactivate a loyalty rule (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Loyalty rule deactivated" }
         }
       }
     },
     "/loyalty/process-order": {
       "post": {
-        "summary": "Process and award loyalty points for an order (DB-level Idempotent)",
+        "summary": "Process and award loyalty points for an order (DB-level Idempotency Guaranteed)",
         "security": [{ "bearerAuth": [] }],
-        "tags": ["Loyalty"],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
         "requestBody": {
           "required": true,
           "content": {
@@ -118,35 +345,35 @@
                 "type": "object",
                 "required": ["orderId", "idempotencyKey"],
                 "properties": {
-                  "orderId": { "type": "string", "format": "uuid" },
-                  "idempotencyKey": { "type": "string", "example": "webhook_order_12345" }
+                  "orderId": { "type": "string", "example": "order-12345" },
+                  "idempotencyKey": { "type": "string", "example": "evt_order_completed_12345" }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Points awarded or idempotent response" }
+          "200": { "description": "Points awarded or cached idempotent response" }
         }
       }
     },
     "/loyalty/process-refund": {
       "post": {
-        "summary": "Reverse loyalty points for cancellation or full/partial refund",
+        "summary": "Reverse loyalty points for order cancellation or partial refund with redemption debt support",
         "security": [{ "bearerAuth": [] }],
-        "tags": ["Loyalty"],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["orderId", "refundAmount", "reason", "idempotencyKey"],
+                "required": ["orderId", "refundAmount"],
                 "properties": {
-                  "orderId": { "type": "string", "format": "uuid" },
+                  "orderId": { "type": "string", "example": "order-12345" },
                   "refundAmount": { "type": "number", "example": 1900.0 },
-                  "reason": { "type": "string", "example": "Damaged items returned" },
-                  "idempotencyKey": { "type": "string", "example": "refund_evt_5678" }
+                  "reason": { "type": "string", "example": "Returned 5 bags damaged cement" },
+                  "idempotencyKey": { "type": "string", "example": "ref_evt_9988" }
                 }
               }
             }
@@ -159,15 +386,249 @@
     },
     "/loyalty/ledger/{influencerId}": {
       "get": {
-        "summary": "Get append-only ledger transaction history for an influencer",
+        "summary": "Get auditable append-only ledger transaction history (Object-level ABAC protected)",
         "security": [{ "bearerAuth": [] }],
-        "tags": ["Loyalty"],
+        "tags": ["Loyalty & Influencer System (Task 2)"],
         "parameters": [
           { "name": "influencerId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": { "description": "Auditable transaction ledger" },
-          "403": { "description": "Forbidden if accessing other influencer's ledger" }
+          "200": { "description": "Auditable transaction ledger list" },
+          "403": { "description": "Forbidden - Attempting to view another influencer's ledger (IDOR defense)" }
+        }
+      }
+    },
+    "/influencers": {
+      "get": {
+        "summary": "List all registered influencer partners (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Influencers (Task 2)"],
+        "responses": {
+          "200": { "description": "List of influencer partners" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      }
+    },
+    "/influencers/{id}": {
+      "get": {
+        "summary": "Get influencer partner profile details (ABAC protected)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Influencers (Task 2)"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Influencer partner details" },
+          "403": { "description": "Forbidden - Access denied to other partner records" }
+        }
+      }
+    },
+    "/influencers/link-referral": {
+      "post": {
+        "summary": "Link a customer account to an influencer via referral code",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Influencers (Task 2)"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customerId", "referralCode"],
+                "properties": {
+                  "customerId": { "type": "string", "example": "cust-priya-sharma-1" },
+                  "referralCode": { "type": "string", "example": "INF-RAHUL-MAIN" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Customer successfully linked to influencer" }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "summary": "List purchase orders (Customer views own orders; Admin views all orders)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Orders"],
+        "responses": {
+          "200": { "description": "List of orders" }
+        }
+      },
+      "post": {
+        "summary": "Place a new material purchase order with automated freight derivation",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Orders"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["items", "shippingAddress", "distanceKm"],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["productId", "quantity"],
+                      "properties": {
+                        "productId": { "type": "string", "example": "prod-cement-1" },
+                        "quantity": { "type": "integer", "example": 20 }
+                      }
+                    }
+                  },
+                  "shippingAddress": { "type": "string", "example": "Site #42, DLF Phase 5, Gurugram" },
+                  "distanceKm": { "type": "number", "example": 35.0 },
+                  "influencerReferralCode": { "type": "string", "example": "INF-RAHUL-MAIN" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Order placed with calculated shipping and linked influencer" }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "summary": "Get order details by ID (ABAC protected - Customers can only view own orders)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Orders"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Order details with line items and shipping breakdown" },
+          "403": { "description": "Forbidden - Cannot view another customer's order" }
+        }
+      }
+    },
+    "/orders/{id}/complete": {
+      "post": {
+        "summary": "Mark order delivered/completed and trigger automatic loyalty point accrual (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Orders"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Order completed and loyalty points processed" },
+          "403": { "description": "Forbidden - Admin role required" }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "summary": "Cancel order and reverse 100% of awarded loyalty points",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Orders"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": { "type": "string", "example": "Customer canceled construction foundation work" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Order cancelled and points reversed in ledger" }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "List available construction material products with assigned shipping profiles",
+        "tags": ["Products Catalog"],
+        "responses": {
+          "200": { "description": "Array of products" }
+        }
+      },
+      "post": {
+        "summary": "Create a new product in the catalog (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Products Catalog"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "slug", "sku", "category", "price", "weightKg"],
+                "properties": {
+                  "name": { "type": "string", "example": "Tata Tiscon 550D TMT Rebar 12mm" },
+                  "slug": { "type": "string", "example": "tata-tiscon-550d-12mm" },
+                  "sku": { "type": "string", "example": "STEEL-TATA-12MM" },
+                  "category": { "type": "string", "example": "Steel & Structural" },
+                  "price": { "type": "number", "example": 72.0 },
+                  "weightKg": { "type": "number", "example": 10.65 },
+                  "shippingProfileId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Product created successfully" }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "summary": "Get product details by ID",
+        "tags": ["Products Catalog"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product details" },
+          "404": { "description": "Product not found" }
+        }
+      },
+      "put": {
+        "summary": "Update product details (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Products Catalog"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product updated" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a product from the catalog (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "tags": ["Products Catalog"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product deleted" }
+        }
+      }
+    },
+    "/products/slug/{slug}": {
+      "get": {
+        "summary": "Get product details by URL slug (SSR SEO endpoint)",
+        "tags": ["Products Catalog"],
+        "parameters": [
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string", "example": "ultratech-super-cement-50kg" } }
+        ],
+        "responses": {
+          "200": { "description": "Product details for SSR rendering" },
+          "404": { "description": "Product not found" }
         }
       }
     }

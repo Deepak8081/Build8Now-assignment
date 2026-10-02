@@ -3,7 +3,7 @@ import { env } from '../../config/env.config.js';
 
 export const apiRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS, // 15 minutes default
-  max: env.RATE_LIMIT_MAX_REQUESTS,   // limit each IP to 100 requests per windowMs
+  max: env.NODE_ENV === 'production' ? env.RATE_LIMIT_MAX_REQUESTS : 1000000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

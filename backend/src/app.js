@@ -43,16 +43,29 @@ if (env.NODE_ENV !== 'test') {
 }
 app.use('/api/', apiRateLimiter);
 
-// Swagger Documentation Setup
-try {
-  const swaggerPath = path.join(__dirname, 'docs', 'swagger.json');
-  if (fs.existsSync(swaggerPath)) {
+// Swagger Documentation Setup (Dynamic Reloading & Raw JSON Endpoint)
+const swaggerPath = path.join(__dirname, 'docs', 'swagger.json');
+
+app.get('/api-docs.json', (req, res) => {
+  try {
     const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, 'utf8'));
-    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+    res.setHeader('Content-Type', 'application/json');
+    return res.json(swaggerDocument);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to load OpenAPI spec' });
   }
-} catch (err) {
-  console.warn('[Swagger Warning] Could not load swagger specs:', err.message);
-}
+});
+
+app.use('/api-docs', swaggerUi.serve, (req, res, next) => {
+  try {
+    const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, 'utf8'));
+    swaggerUi.setup(swaggerDocument, {
+      customSiteTitle: 'Build8Now API Documentation (22 Paths / 31 Endpoints)',
+    })(req, res, next);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Health Check
 app.get('/health', (req, res) => {

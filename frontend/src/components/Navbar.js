@@ -89,11 +89,11 @@ export default function Navbar() {
         {/* Navigation & Active User Section */}
         <nav className="flex items-center space-x-3 sm:space-x-5 text-xs sm:text-sm font-semibold">
           <Link
-            href={currentUser ? '/' : '/?notice=protected_route'}
+            href="/"
             className="text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
           >
             <FiShield className="w-4 h-4 text-purple-400" />
-            Portal & RBAC
+            Workspace Portal
           </Link>
 
           <Link
